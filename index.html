@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>wabps</title>
+  </head>
+
+  <body style="margin: 0">
+    <div id="progress" style="position: absolute; left: 0; right: 0; bottom: 0; margin: auto; z-index: 10; background: rgba(64, 64, 64, 0.9); height: 26px; width: 66px; color: white; text-align: center; font-size: 24px; font-family: monospace;"></div>
+    <canvas id="output" width="1024" height="600" style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; margin: auto;"></canvas>
+
+    <script type="text/javascript">
+    window.onload = async function () {
+      const getFrequency = (n, base_frequency, i, octaves) => {
+        return base_frequency * Math.pow(2, i / (n / octaves))
+      }
+
+      const canvas = document.getElementById("output")
+      const canvas_ctx = canvas.getContext('2d')
+
+      canvas_ctx.fillStyle = "#000000"
+      canvas_ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      // load audio
+      const audio_context = new window.AudioContext({
+        sampleRate: 44100
+      })
+      const request = new XMLHttpRequest()
+      request.open('GET', 'female_french_numbers_1_10.wav', true)
+      request.responseType = 'arraybuffer'
+
+      // analysis parameters
+      const minimum_frequency = 16.34
+      const maximum_frequency = audio_context.sampleRate / 2 // linear
+      const octaves = 10 // logarithmic
+      const frequency_step = 30 // linear
+      const analysis_window_size = 256
+      const magnitude_factor = 128
+
+      canvas.height = 439 // linear : Math.round((maximum_frequency - minimum_frequency) / frequency_step)
+
+      // load audio sample
+      request.onload = function () {
+        const audio_data = request.response
+
+        audio_context.decodeAudioData(audio_data, function(audio_buffer) {
+          // setup canvas width from audio length
+          canvas.width = Math.round(audio_buffer.length / analysis_window_size)
+
+          const analysis_band = canvas_ctx.createImageData(canvas.width, 1);
+          const analysis_band_data = analysis_band.data;
+
+          let percent_complete = 0
+
+          let y = canvas.height
+
+          // now is where the analysis fun begin
+          // this run the filter on an audio source multiple time, each time with different Q frequency
+          // the result of each frequency band is drawn onto the canvas
+          const analyze_frequency_band = (current_frequency) => {
+            let x = 0
+
+            // create offline audio context & connect graph
+            const offline_audio_ctx = new OfflineAudioContext(1, audio_buffer.length, audio_context.sampleRate);
+
+            // create a bandpass filter
+            const bp_filter = offline_audio_ctx.createBiquadFilter()
+            bp_filter.type = 'bandpass'
+            bp_filter.connect(offline_audio_ctx.destination)
+
+            // run analysis for a single band
+            const from = current_frequency
+            const to = getFrequency(canvas.height, minimum_frequency, canvas.height - y + 1, octaves) // linear : current_frequency + frequency_step
+            const geometric_mean = Math.sqrt(from * to)
+
+            bp_filter.frequency.value = geometric_mean
+            bp_filter.Q.value = geometric_mean / (to - from)
+            
+            const source_node = offline_audio_ctx.createBufferSource()
+            source_node.buffer = audio_buffer
+
+            source_node.connect(bp_filter)
+            source_node.start(0)
+
+            // start frequency band analysis & rendering
+            offline_audio_ctx.startRendering().then((rendered_buffer) => {
+              const pcmf32_buffer = rendered_buffer.getChannelData(0)
+
+              // draw frequency band
+              let analysis_data = []
+              for (let i = 0; i < pcmf32_buffer.length; i++) {
+                analysis_data.push(pcmf32_buffer[i])
+
+                if (analysis_data.length >= analysis_window_size) {
+                  let mean_amplitude = 0
+                  for (let j = 0; j < analysis_data.length; j += 1) {
+                    mean_amplitude += Math.abs(analysis_data[j])
+                  }
+                  mean_amplitude /= analysis_data.length
+
+                  const color = Math.round(mean_amplitude * 255 * magnitude_factor);
+
+                  const index = x * 4
+                  analysis_band_data[index + 0] = color
+                  analysis_band_data[index + 1] = color
+                  analysis_band_data[index + 2] = color
+                  analysis_band_data[index + 3] = 255
+
+                  analysis_data = []
+
+                  x += 1
+                }
+              }
+
+              canvas_ctx.putImageData(analysis_band, 0, y);
+
+              // once done instruct to run it again for the next frequency band unless it reach the maximum frequency
+              if (y > 0) {
+                // initialize new frequency band position
+                x = 0
+                y -= 1
+
+                // compute progress %
+                const percent_complete_new = Math.round((1 - y / canvas.height) * 100)
+                if (percent_complete_new != percent_complete) {
+                  const progressElement = document.getElementById("progress")
+                  progressElement.innerText = percent_complete_new + '%'
+
+                  percent_complete = percent_complete_new                  
+                }
+
+                // linear : current_frequency + frequency_step
+                setTimeout(analyze_frequency_band, 0, getFrequency(canvas.height, minimum_frequency, canvas.height - y, octaves))
+              }
+            })
+          }
+
+          analyze_frequency_band(minimum_frequency)
+        }, function () {
+          window.alert('Could not load audio file.')
+        })
+
+      }
+
+      request.send()
+    }
+    </script>
+  </body>
+</html>
