@@ -47,8 +47,8 @@
           // setup canvas width from audio length
           canvas.width = Math.round(audio_buffer.length / analysis_window_size)
 
-          const analysis_band = canvas_ctx.createImageData(canvas.width, 1);
-          const analysis_band_data = analysis_band.data;
+          const analysis_band = canvas_ctx.createImageData(canvas.width, 1)
+          const analysis_band_data = analysis_band.data
 
           let percent_complete = 0
 
@@ -61,7 +61,7 @@
             let x = 0
 
             // create offline audio context & connect graph
-            const offline_audio_ctx = new OfflineAudioContext(1, audio_buffer.length, audio_context.sampleRate);
+            const offline_audio_ctx = new OfflineAudioContext(1, audio_buffer.length, audio_context.sampleRate)
 
             // create a bandpass filter
             const bp_filter = offline_audio_ctx.createBiquadFilter()
@@ -98,7 +98,7 @@
                   }
                   mean_amplitude /= analysis_data.length
 
-                  const color = Math.round(mean_amplitude * 255 * magnitude_factor);
+                  const color = Math.round(mean_amplitude * 255 * magnitude_factor)
 
                   const index = x * 4
                   analysis_band_data[index + 0] = color
@@ -112,7 +112,7 @@
                 }
               }
 
-              canvas_ctx.putImageData(analysis_band, 0, y);
+              canvas_ctx.putImageData(analysis_band, 0, y)
 
               // once done instruct to run it again for the next frequency band unless it reach the maximum frequency
               if (y > 0) {
