@@ -12,7 +12,7 @@ The example code is straightforward and support both linear and logarithmic rend
 
 The output values are normalized.
 
-## Custom biquad node
+## Custom biquad node
 
 The custom_biquad directory contain an example which use a custom biquad audio worklet node with support for multiple orders.
 
